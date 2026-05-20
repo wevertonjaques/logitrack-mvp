@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useCurrentLocation } from '@/hooks/useCurrentLocation';
 import { updateOrderStatus, uploadProofOfDelivery } from '@/app/actions/orders';
@@ -48,6 +48,21 @@ interface Order {
 }
 
 export default function DriverDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <Truck className="w-8 h-8 text-sky-400 animate-bounce" />
+          <p className="text-sm text-slate-400">Carregando painel do motorista...</p>
+        </div>
+      </div>
+    }>
+      <DriverDashboardContent />
+    </Suspense>
+  );
+}
+
+function DriverDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const driverId = searchParams.get('driverId');
@@ -151,7 +166,7 @@ export default function DriverDashboard() {
       // 1. Atualizar status no banco
       const res = await updateOrderStatus(activeOrder.id, 'in_transit');
       if (!res.success) {
-        setStatusMsg({ type: 'error', text: res.message });
+        setStatusMsg({ type: 'error', text: res.message || 'Erro ao iniciar rota.' });
         return;
       }
 

@@ -2,7 +2,10 @@
 
 import { supabase } from '@/lib/supabaseClient';
 
-export async function updateOrderStatus(orderId: string, newStatus: string) {
+export async function updateOrderStatus(
+  orderId: string, 
+  newStatus: string
+): Promise<{ success: boolean; message?: string; order?: any }> {
   try {
     const { data, error } = await supabase
       .from('orders')
@@ -21,7 +24,9 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
   }
 }
 
-export async function uploadProofOfDelivery(formData: FormData) {
+export async function uploadProofOfDelivery(
+  formData: FormData
+): Promise<{ success: boolean; message: string; photoUrl?: string }> {
   const orderId = formData.get('orderId') as string;
   const file = formData.get('file') as File;
 
