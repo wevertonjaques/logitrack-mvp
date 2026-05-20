@@ -122,9 +122,7 @@ CREATE OR REPLACE TRIGGER trg_log_order_status_change
 AFTER INSERT OR UPDATE ON orders
 FOR EACH ROW EXECUTE FUNCTION log_order_status_change();
 
--- 5. Row Level Security (RLS) Policies
-
--- Habilitar RLS nas tabelas principais
+-- 5. Habilitar Row Level Security (RLS)
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
@@ -134,52 +132,55 @@ ALTER TABLE tracking_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_status_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proofs_of_delivery ENABLE ROW LEVEL SECURITY;
 
--- Políticas para a Tabela de Pedidos (Orders)
--- Empresas (Authenticated) podem ver todos os pedidos associados a empresas do usuário (simplificado para MVP: qualquer usuário autenticado por agora, ou com base em company_id se associado a um perfil)
-CREATE POLICY "Users can view all orders"
-ON orders FOR SELECT
-TO authenticated
-USING (true);
+-- 6. Políticas RLS Ultra Permissivas (Sem Restrições para Ambiente de Teste Compartilhado)
+-- Isso permite que qualquer pessoa testando pelo link compartilhado execute ações sem erros de autenticação
 
--- Motoristas podem visualizar suas próprias ordens atribuídas
-CREATE POLICY "Drivers can view assigned orders"
-ON orders FOR SELECT
-TO authenticated
-USING (driver_id IN (SELECT id FROM drivers WHERE user_id = auth.uid()));
+-- Empresas
+CREATE POLICY "Permitir tudo em companies para testes" ON companies FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Motoristas podem atualizar o status das suas ordens
-CREATE POLICY "Drivers can update assigned orders status"
-ON orders FOR UPDATE
-TO authenticated
-USING (driver_id IN (SELECT id FROM drivers WHERE user_id = auth.uid()))
-WITH CHECK (driver_id IN (SELECT id FROM drivers WHERE user_id = auth.uid()));
+-- Veículos
+CREATE POLICY "Permitir tudo em vehicles para testes" ON vehicles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Clientes podem rastrear um pedido específico anonimamente (público) para a tela de tracking
-CREATE POLICY "Public anonymous tracking access"
-ON orders FOR SELECT
-TO anon
-USING (status IN ('pending', 'assigned', 'collecting', 'in_transit', 'delivered'));
+-- Motoristas
+CREATE POLICY "Permitir tudo em drivers para testes" ON drivers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Políticas para a Tabela de Eventos de Rastreamento (tracking_events)
--- Motoristas podem inserir dados de rastreamento para suas entregas
-CREATE POLICY "Drivers can insert tracking events"
-ON tracking_events FOR INSERT
-TO authenticated
-WITH CHECK (driver_id IN (SELECT id FROM drivers WHERE user_id = auth.uid()));
+-- Endereços
+CREATE POLICY "Permitir tudo em addresses para testes" ON addresses FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Qualquer um pode visualizar eventos de rastreamento para exibir no mapa público de tracking
-CREATE POLICY "Public tracking events view"
-ON tracking_events FOR SELECT
+-- Pedidos
+CREATE POLICY "Permitir tudo em orders para testes" ON orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Histórico de Status
+CREATE POLICY "Permitir tudo em status history para testes" ON order_status_history FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Comprovantes
+CREATE POLICY "Permitir tudo em proofs para testes" ON proofs_of_delivery FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Eventos de Rastreamento (GPS)
+CREATE POLICY "Permitir tudo em tracking_events para testes" ON tracking_events FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+
+-- 7. Configuração do Storage (Bucket de Fotos/Comprovantes)
+-- Cria o bucket 'proofs' público se não existir
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('proofs', 'proofs', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Habilitar políticas de acesso completo para o bucket de fotos do MVP
+-- Uploads (Insert)
+CREATE POLICY "Permitir upload para todos no bucket proofs"
+ON storage.objects FOR INSERT
 TO anon, authenticated
-USING (true);
+WITH CHECK (bucket_id = 'proofs');
 
--- Políticas para Drivers
-CREATE POLICY "Anyone can view drivers (needed for tracking)"
-ON drivers FOR SELECT
+-- Visualização (Select)
+CREATE POLICY "Permitir leitura para todos no bucket proofs"
+ON storage.objects FOR SELECT
 TO anon, authenticated
-USING (true);
+USING (bucket_id = 'proofs');
 
-CREATE POLICY "Enable insert for authenticated users or anonymous form"
-ON drivers FOR INSERT
+-- Modificações (Update/Delete)
+CREATE POLICY "Permitir update e delete para todos no bucket proofs"
+ON storage.objects FOR UPDATE, DELETE
 TO anon, authenticated
-WITH CHECK (true);
+USING (bucket_id = 'proofs');
