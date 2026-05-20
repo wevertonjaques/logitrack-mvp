@@ -14,7 +14,7 @@ END $$;
 
 -- 2. Criação das Tabelas Principais
 
--- Empresas (Multi-tenancy)
+-- Empresas (Multi-tenancy/Embarcadores)
 CREATE TABLE IF NOT EXISTS companies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -54,10 +54,22 @@ CREATE TABLE IF NOT EXISTS addresses (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Clientes (Final Customers para CRUD dedicado)
+CREATE TABLE IF NOT EXISTS customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT UNIQUE,
+  phone TEXT,
+  cpf_cnpj TEXT UNIQUE NOT NULL,
+  address_id UUID REFERENCES addresses(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Pedidos (Orders)
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
   driver_id UUID REFERENCES drivers(id) ON DELETE SET NULL,
   status order_status NOT NULL DEFAULT 'pending',
   origin_address_id UUID REFERENCES addresses(id) ON DELETE SET NULL,
@@ -99,6 +111,7 @@ CREATE TABLE IF NOT EXISTS proofs_of_delivery (
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_company ON orders(company_id);
 CREATE INDEX IF NOT EXISTS idx_orders_driver ON orders(driver_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_addresses_location ON addresses USING GIST(location);
 CREATE INDEX IF NOT EXISTS idx_tracking_location ON tracking_events USING GIST(location);
 CREATE INDEX IF NOT EXISTS idx_tracking_recorded_at ON tracking_events(recorded_at DESC);
@@ -127,6 +140,7 @@ ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tracking_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_status_history ENABLE ROW LEVEL SECURITY;
@@ -137,18 +151,17 @@ CREATE POLICY "Permitir tudo em companies para testes" ON companies FOR ALL TO a
 CREATE POLICY "Permitir tudo em vehicles para testes" ON vehicles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo em drivers para testes" ON drivers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo em addresses para testes" ON addresses FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir tudo em customers para testes" ON customers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo em orders para testes" ON orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo em status history para testes" ON order_status_history FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo em proofs para testes" ON proofs_of_delivery FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo em tracking_events para testes" ON tracking_events FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- 7. Configuração do Storage (Bucket de Fotos/Comprovantes)
--- Cria o bucket 'proofs' público se não existir
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('proofs', 'proofs', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Habilitar políticas de acesso completo para o bucket de fotos do MVP
 -- Upload (Insert)
 CREATE POLICY "Permitir upload para todos no bucket proofs"
 ON storage.objects FOR INSERT

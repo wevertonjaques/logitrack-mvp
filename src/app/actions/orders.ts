@@ -159,12 +159,91 @@ export async function seedDemoData() {
       destId = addr2.id;
     }
 
-    // 3. Criar pedido demo pendente
+    // 2.5. Criar cliente demo se não existir
+    let customerId: string;
+    const { data: existingCustomer } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('cpf_cnpj', '123.456.789-01')
+      .limit(1)
+      .maybeSingle();
+
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+    } else {
+      const { data: newCustomer, error: custErr } = await supabase
+        .from('customers')
+        .insert({
+          name: 'Maria Souza (Cliente Final)',
+          email: 'maria.souza@email.com',
+          phone: '(11) 98765-4321',
+          cpf_cnpj: '123.456.789-01',
+          address_id: destId,
+        })
+        .select('id')
+        .single();
+      if (custErr) throw custErr;
+      customerId = newCustomer.id;
+    }
+
+    // 2.7. Criar veículo demo se não existir
+    let vehicleId: string;
+    const { data: existingVehicle } = await supabase
+      .from('vehicles')
+      .select('id')
+      .eq('plate', 'ABC-1234')
+      .limit(1)
+      .maybeSingle();
+
+    if (existingVehicle) {
+      vehicleId = existingVehicle.id;
+    } else {
+      const { data: newVehicle, error: vehErr } = await supabase
+        .from('vehicles')
+        .insert({
+          plate: 'ABC-1234',
+          model: 'Volvo FH 540 (Caminhão)',
+          max_weight_kg: 30000,
+          max_volume_m3: 80,
+        })
+        .select('id')
+        .single();
+      if (vehErr) throw vehErr;
+      vehicleId = newVehicle.id;
+    }
+
+    // 2.8. Criar motorista demo se não existir
+    let driverId: string;
+    const { data: existingDriver } = await supabase
+      .from('drivers')
+      .select('id')
+      .eq('cpf', '111.111.111-11')
+      .limit(1)
+      .maybeSingle();
+
+    if (existingDriver) {
+      driverId = existingDriver.id;
+    } else {
+      const { data: newDriver, error: drvErr } = await supabase
+        .from('drivers')
+        .insert({
+          name: 'João Silva (Motorista)',
+          cpf: '111.111.111-11',
+          cnh_expires_at: '2030-12-31',
+          vehicle_id: vehicleId,
+        })
+        .select('id')
+        .single();
+      if (drvErr) throw drvErr;
+      driverId = newDriver.id;
+    }
+
+    // 3. Criar pedido demo designado
     const { data: existingOrder } = await supabase
       .from('orders')
       .select('id')
       .eq('company_id', companyId)
-      .eq('status', 'pending')
+      .eq('driver_id', driverId)
       .limit(1)
       .maybeSingle();
 
@@ -177,7 +256,9 @@ export async function seedDemoData() {
         .from('orders')
         .insert({
           company_id: companyId,
-          status: 'pending',
+          customer_id: customerId,
+          driver_id: driverId,
+          status: 'assigned',
           origin_address_id: originId,
           destination_address_id: destId,
           weight_kg: 12.5,
@@ -293,6 +374,7 @@ export async function deleteAddress(addressId: string): Promise<{ success: boole
 
 export async function createOrder(formData: FormData): Promise<{ success: boolean; message: string; orderId?: string }> {
   const companyId = formData.get('companyId') as string;
+  const customerId = formData.get('customerId') as string || null;
   const driverId = formData.get('driverId') as string || null;
   const originAddressId = formData.get('originAddressId') as string;
   const destinationAddressId = formData.get('destinationAddressId') as string;
@@ -326,6 +408,7 @@ export async function createOrder(formData: FormData): Promise<{ success: boolea
       .from('orders')
       .insert({
         company_id: activeCompanyId,
+        customer_id: customerId || null,
         driver_id: driverId || null,
         origin_address_id: originAddressId,
         destination_address_id: destinationAddressId,
@@ -347,6 +430,7 @@ export async function updateOrder(
   orderId: string, 
   formData: FormData
 ): Promise<{ success: boolean; message: string }> {
+  const customerId = formData.get('customerId') as string || null;
   const driverId = formData.get('driverId') as string || null;
   const originAddressId = formData.get('originAddressId') as string;
   const destinationAddressId = formData.get('destinationAddressId') as string;
@@ -362,6 +446,7 @@ export async function updateOrder(
     const { error } = await supabase
       .from('orders')
       .update({
+        customer_id: customerId || null,
         driver_id: driverId || null,
         origin_address_id: originAddressId,
         destination_address_id: destinationAddressId,

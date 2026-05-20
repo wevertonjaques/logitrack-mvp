@@ -11,9 +11,15 @@ import {
   createOrder, updateOrder, deleteOrder,
   seedDemoData
 } from '@/app/actions/orders';
+import {
+  createCustomer, updateCustomer, deleteCustomer
+} from '@/app/actions/customers';
+import {
+  createCompany, updateCompany, deleteCompany
+} from '@/app/actions/companies';
 import { 
   Truck, User, MapPin, Package, LogOut, Plus, Edit3, Trash2, 
-  RefreshCw, ClipboardList, ShieldAlert, CheckCircle, Database
+  RefreshCw, ClipboardList, ShieldAlert, CheckCircle, Database, Building2
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -28,16 +34,18 @@ export default function AdminPage() {
   }, [router]);
 
   // Estados de Abas
-  const [activeTab, setActiveTab] = useState<'orders' | 'drivers' | 'addresses'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'drivers' | 'customers' | 'companies' | 'addresses'>('orders');
 
   // Listas do Supabase
   const [orders, setOrders] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Estados de Modais
-  const [modalType, setModalType] = useState<'driver' | 'address' | 'order' | null>(null);
+  const [modalType, setModalType] = useState<'driver' | 'address' | 'order' | 'customer' | 'company' | null>(null);
   const [editId, setEditId] = useState<string | null>(null); // Se definido, é edição
   const [actionLoading, setActionLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -61,7 +69,24 @@ export default function AdminPage() {
   const [addrLat, setAddrLat] = useState('-23.561486');
   const [addrLng, setAddrLng] = useState('-46.657635');
 
+  // Form Cliente
+  const [custName, setCustName] = useState('');
+  const [custEmail, setCustEmail] = useState('');
+  const [custPhone, setCustPhone] = useState('');
+  const [custCpfCnpj, setCustCpfCnpj] = useState('');
+  const [custStreet, setCustStreet] = useState('');
+  const [custCity, setCustCity] = useState('');
+  const [custState, setCustState] = useState('');
+  const [custPostalCode, setCustPostalCode] = useState('');
+  const [custLat, setCustLat] = useState('-23.561486');
+  const [custLng, setCustLng] = useState('-46.657635');
+
+  // Form Empresa
+  const [compName, setCompName] = useState('');
+
   // Form Pedido/Frete
+  const [orderCompanyId, setOrderCompanyId] = useState('');
+  const [orderCustomerId, setOrderCustomerId] = useState('');
   const [orderDriverId, setOrderDriverId] = useState('');
   const [orderOriginId, setOrderOriginId] = useState('');
   const [orderDestId, setOrderDestId] = useState('');
@@ -87,12 +112,28 @@ export default function AdminPage() {
         .order('street');
       setAddresses(addrData || []);
 
-      // 3. Buscar pedidos com relacionamentos
+      // 3. Buscar clientes
+      const { data: custData } = await supabase
+        .from('customers')
+        .select('*, addresses(*)')
+        .order('name');
+      setCustomers(custData || []);
+
+      // 4. Buscar empresas
+      const { data: compData } = await supabase
+        .from('companies')
+        .select('*')
+        .order('name');
+      setCompanies(compData || []);
+
+      // 5. Buscar pedidos com relacionamentos
       const { data: ordersData } = await supabase
         .from('orders')
         .select(`
           *,
           driver:drivers(id, name),
+          customer:customers(id, name),
+          company:companies(id, name),
           origin:addresses!orders_origin_address_id_fkey(*),
           destination:addresses!orders_destination_address_id_fkey(*)
         `)
@@ -130,7 +171,22 @@ export default function AdminPage() {
     setAddrPostal('');
     setAddrLat('-23.561486');
     setAddrLng('-46.657635');
+    // Reset cliente
+    setCustName('');
+    setCustEmail('');
+    setCustPhone('');
+    setCustCpfCnpj('');
+    setCustStreet('');
+    setCustCity('');
+    setCustState('');
+    setCustPostalCode('');
+    setCustLat('-23.561486');
+    setCustLng('-46.657635');
+    // Reset empresa
+    setCompName('');
     // Reset pedido
+    setOrderCompanyId('');
+    setOrderCustomerId('');
     setOrderDriverId('');
     setOrderOriginId('');
     setOrderDestId('');
@@ -161,8 +217,6 @@ export default function AdminPage() {
     setAddrState(addr.state);
     setAddrPostal(addr.postal_code);
     
-    // Extrair lat/lng do PostGIS point (geography)
-    // No Supabase, pode retornar como string 'POINT(lng lat)' ou objeto.
     let lat = '-23.561486';
     let lng = '-46.657635';
     if (typeof addr.location === 'string') {
@@ -177,9 +231,46 @@ export default function AdminPage() {
     setModalType('address');
   };
 
+  // Abrir modal de edição para cliente
+  const handleEditCustomer = (cust: any) => {
+    setEditId(cust.id);
+    setCustName(cust.name);
+    setCustEmail(cust.email || '');
+    setCustPhone(cust.phone || '');
+    setCustCpfCnpj(cust.cpf_cnpj);
+    
+    // Endereço
+    setCustStreet(cust.addresses?.street || '');
+    setCustCity(cust.addresses?.city || '');
+    setCustState(cust.addresses?.state || '');
+    setCustPostalCode(cust.addresses?.postal_code || '');
+
+    let lat = '-23.561486';
+    let lng = '-46.657635';
+    if (typeof cust.addresses?.location === 'string') {
+      const match = cust.addresses.location.match(/POINT\(([^ ]+) ([^ ]+)\)/);
+      if (match) {
+        lng = match[1];
+        lat = match[2];
+      }
+    }
+    setCustLat(lat);
+    setCustLng(lng);
+    setModalType('customer');
+  };
+
+  // Abrir modal de edição para empresa
+  const handleEditCompany = (comp: any) => {
+    setEditId(comp.id);
+    setCompName(comp.name);
+    setModalType('company');
+  };
+
   // Abrir modal de edição para pedido
   const handleEditOrder = (ord: any) => {
     setEditId(ord.id);
+    setOrderCompanyId(ord.company_id || '');
+    setOrderCustomerId(ord.customer_id || '');
     setOrderDriverId(ord.driver_id || '');
     setOrderOriginId(ord.origin_address_id || '');
     setOrderDestId(ord.destination_address_id || '');
@@ -238,10 +329,58 @@ export default function AdminPage() {
           setMsg({ type: 'error', text: res.message });
         }
       } 
+      else if (modalType === 'customer') {
+        formData.append('name', custName);
+        formData.append('email', custEmail);
+        formData.append('phone', custPhone);
+        formData.append('cpfCnpj', custCpfCnpj);
+        formData.append('street', custStreet);
+        formData.append('city', custCity);
+        formData.append('state', custState);
+        formData.append('postalCode', custPostalCode);
+        formData.append('lat', custLat);
+        formData.append('lng', custLng);
+
+        const res = editId
+          ? await updateCustomer(editId, formData)
+          : await createCustomer(formData);
+
+        if (res.success) {
+          setMsg({ type: 'success', text: res.message });
+          setTimeout(() => { closeModal(); loadData(); }, 1000);
+        } else {
+          setMsg({ type: 'error', text: res.message });
+        }
+      }
+      else if (modalType === 'company') {
+        formData.append('name', compName);
+
+        const res = editId
+          ? await updateCompany(editId, formData)
+          : await createCompany(formData);
+
+        if (res.success) {
+          setMsg({ type: 'success', text: res.message });
+          setTimeout(() => { closeModal(); loadData(); }, 1000);
+        } else {
+          setMsg({ type: 'error', text: res.message });
+        }
+      }
       else if (modalType === 'order') {
+        formData.append('companyId', orderCompanyId);
+        formData.append('customerId', orderCustomerId);
         formData.append('driverId', orderDriverId);
         formData.append('originAddressId', orderOriginId);
-        formData.append('destinationAddressId', orderDestId);
+        
+        // Se escolheu cliente destinatário, usar o endereço dele
+        let finalDestAddressId = orderDestId;
+        if (orderCustomerId) {
+          const selectedCust = customers.find(c => c.id === orderCustomerId);
+          if (selectedCust?.address_id) {
+            finalDestAddressId = selectedCust.address_id;
+          }
+        }
+        formData.append('destinationAddressId', finalDestAddressId);
         formData.append('weightKg', orderWeight);
         formData.append('volumeM3', orderVolume);
         formData.append('status', orderStatus);
@@ -265,13 +404,15 @@ export default function AdminPage() {
   };
 
   // Exclusões
-  const handleDelete = async (type: 'driver' | 'address' | 'order', id: string) => {
+  const handleDelete = async (type: 'driver' | 'address' | 'order' | 'customer' | 'company', id: string) => {
     if (!confirm('Deseja realmente excluir este item?')) return;
 
     try {
       let res;
       if (type === 'driver') res = await deleteDriver(id);
       else if (type === 'address') res = await deleteAddress(id);
+      else if (type === 'customer') res = await deleteCustomer(id);
+      else if (type === 'company') res = await deleteCompany(id);
       else res = await deleteOrder(id);
 
       if (res.success) {
@@ -386,8 +527,8 @@ export default function AdminPage() {
               <User className="w-6 h-6 text-slate-300" />
             </div>
             <div>
-              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Motoristas</p>
-              <p className="text-xl font-bold mt-1 text-slate-100">{drivers.length}</p>
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Clientes Totais</p>
+              <p className="text-xl font-bold mt-1 text-slate-100">{customers.length}</p>
             </div>
           </div>
         </div>
@@ -395,10 +536,10 @@ export default function AdminPage() {
         {/* Abas e Novo Item */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-slate-900/20 p-2 rounded-2xl border border-slate-900">
           {/* Navegação Abas */}
-          <div className="flex gap-1.5 p-1 bg-slate-950/60 rounded-xl border border-slate-850 w-full sm:w-auto">
+          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-950/60 rounded-xl border border-slate-850 w-full sm:w-auto">
             <button
               onClick={() => setActiveTab('orders')}
-              className={`flex-1 sm:flex-initial py-2 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'orders' ? 'bg-slate-800 text-slate-100 border border-slate-700/30' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -406,15 +547,31 @@ export default function AdminPage() {
             </button>
             <button
               onClick={() => setActiveTab('drivers')}
-              className={`flex-1 sm:flex-initial py-2 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'drivers' ? 'bg-slate-800 text-slate-100 border border-slate-700/30' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <User className="w-4 h-4" /> Motoristas
             </button>
             <button
+              onClick={() => setActiveTab('customers')}
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'customers' ? 'bg-slate-800 text-slate-100 border border-slate-700/30' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <User className="w-4 h-4 text-emerald-400" /> Clientes
+            </button>
+            <button
+              onClick={() => setActiveTab('companies')}
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'companies' ? 'bg-slate-800 text-slate-100 border border-slate-700/30' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Building2 className="w-4 h-4 text-teal-400" /> Embarcadores
+            </button>
+            <button
               onClick={() => setActiveTab('addresses')}
-              className={`flex-1 sm:flex-initial py-2 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'addresses' ? 'bg-slate-800 text-slate-100 border border-slate-700/30' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -427,11 +584,18 @@ export default function AdminPage() {
             onClick={() => {
               if (activeTab === 'orders') setModalType('order');
               if (activeTab === 'drivers') setModalType('driver');
+              if (activeTab === 'customers') setModalType('customer');
+              if (activeTab === 'companies') setModalType('company');
               if (activeTab === 'addresses') setModalType('address');
             }}
             className="w-full sm:w-auto py-2.5 px-4 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-sky-600/10 cursor-pointer"
           >
-            <Plus className="w-4 h-4" /> Cadastrar {activeTab === 'orders' ? 'Frete' : activeTab === 'drivers' ? 'Motorista' : 'Endereço'}
+            <Plus className="w-4 h-4" /> Cadastrar {
+              activeTab === 'orders' ? 'Frete' : 
+              activeTab === 'drivers' ? 'Motorista' : 
+              activeTab === 'customers' ? 'Cliente' : 
+              activeTab === 'companies' ? 'Embarcador' : 'Endereço'
+            }
           </button>
         </div>
 
@@ -451,10 +615,10 @@ export default function AdminPage() {
                     <thead>
                       <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-medium">
                         <th className="p-4">Pedido / ID</th>
-                        <th className="p-4">Origem</th>
-                        <th className="p-4">Destino</th>
+                        <th className="p-4">Embarcador</th>
+                        <th className="p-4">Cliente / Destinatário</th>
+                        <th className="p-4">Rota (Origem → Destino)</th>
                         <th className="p-4">Motorista</th>
-                        <th className="p-4">Carga (kg / m³)</th>
                         <th className="p-4">Status</th>
                         <th className="p-4 text-right">Ações</th>
                       </tr>
@@ -471,12 +635,10 @@ export default function AdminPage() {
                               <div className="font-semibold text-slate-200">#{o.id.substring(0, 8)}</div>
                               <div className="text-[10px] text-slate-500 mt-0.5">{new Date(o.created_at).toLocaleDateString()}</div>
                             </td>
-                            <td className="p-4 max-w-[200px] truncate">{o.origin?.street || 'N/A'}</td>
-                            <td className="p-4 max-w-[200px] truncate">{o.destination?.street || 'N/A'}</td>
+                            <td className="p-4 font-medium text-slate-350">{o.company?.name || 'LogiTrack Logística'}</td>
+                            <td className="p-4 font-semibold text-slate-200">{o.customer?.name || 'Cliente Demo'}</td>
+                            <td className="p-4 max-w-[200px] truncate">{o.origin?.street.split(',')[0]} → {o.destination?.street.split(',')[0]}</td>
                             <td className="p-4 font-semibold text-sky-400">{o.driver?.name || <span className="text-slate-500 italic">Não atribuído</span>}</td>
-                            <td className="p-4 text-slate-300">
-                              {o.weight_kg} kg / {o.volume_m3} m³
-                            </td>
                             <td className="p-4">
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                 o.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
@@ -563,6 +725,102 @@ export default function AdminPage() {
                 </div>
               )}
 
+              {/* ABA CLIENTES */}
+              {activeTab === 'customers' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-medium">
+                        <th className="p-4">Nome</th>
+                        <th className="p-4">CPF / CNPJ</th>
+                        <th className="p-4">Email</th>
+                        <th className="p-4">Telefone</th>
+                        <th className="p-4">Endereço Associado</th>
+                        <th className="p-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850">
+                      {customers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-500">Nenhum cliente final cadastrado.</td>
+                        </tr>
+                      ) : (
+                        customers.map((c) => (
+                          <tr key={c.id} className="hover:bg-slate-900/20">
+                            <td className="p-4 font-semibold text-slate-200">{c.name}</td>
+                            <td className="p-4 text-slate-400 font-mono">{c.cpf_cnpj}</td>
+                            <td className="p-4 text-slate-350">{c.email || 'N/A'}</td>
+                            <td className="p-4 text-slate-400">{c.phone || 'N/A'}</td>
+                            <td className="p-4 text-slate-300">
+                              {c.addresses ? `${c.addresses.street}, ${c.addresses.city}` : <span className="text-slate-500 italic">Sem endereço</span>}
+                            </td>
+                            <td className="p-4 text-right space-x-2">
+                              <button
+                                onClick={() => handleEditCustomer(c)}
+                                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg cursor-pointer inline-flex"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete('customer', c.id)}
+                                className="p-1.5 bg-slate-800 hover:bg-red-950/40 text-red-400 rounded-lg cursor-pointer inline-flex"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* ABA EMBARCADORES */}
+              {activeTab === 'companies' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-medium">
+                        <th className="p-4">Nome da Empresa</th>
+                        <th className="p-4">ID do Supabase</th>
+                        <th className="p-4">Data de Cadastro</th>
+                        <th className="p-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850">
+                      {companies.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-slate-500">Nenhuma empresa parceira cadastrada.</td>
+                        </tr>
+                      ) : (
+                        companies.map((c) => (
+                          <tr key={c.id} className="hover:bg-slate-900/20">
+                            <td className="p-4 font-semibold text-slate-200">{c.name}</td>
+                            <td className="p-4 text-slate-400 font-mono text-[10px] select-all">{c.id}</td>
+                            <td className="p-4 text-slate-350">{new Date(c.created_at).toLocaleDateString()}</td>
+                            <td className="p-4 text-right space-x-2">
+                              <button
+                                onClick={() => handleEditCompany(c)}
+                                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg cursor-pointer inline-flex"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete('company', c.id)}
+                                className="p-1.5 bg-slate-800 hover:bg-red-950/40 text-red-400 rounded-lg cursor-pointer inline-flex"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               {/* ABA ENDEREÇOS */}
               {activeTab === 'addresses' && (
                 <div className="overflow-x-auto">
@@ -627,7 +885,7 @@ export default function AdminPage() {
       </main>
 
       {/* ==============================================
-          MODAIS DOS FORMULÁRIOS (DRIVERS, ADDRESSES, ORDERS)
+          MODAIS DOS FORMULÁRIOS
          ============================================== */}
       {modalType && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -635,7 +893,12 @@ export default function AdminPage() {
             <div className="p-6 border-b border-slate-850 flex justify-between items-center">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 {editId ? <Edit3 className="w-4 h-4 text-sky-400" /> : <Plus className="w-4 h-4 text-sky-400" />}
-                {editId ? 'Editar' : 'Cadastrar'} {modalType === 'driver' ? 'Motorista' : modalType === 'address' ? 'Endereço/Cliente' : 'Frete/Pedido'}
+                {editId ? 'Editar' : 'Cadastrar'} {
+                  modalType === 'driver' ? 'Motorista' : 
+                  modalType === 'address' ? 'Endereço' : 
+                  modalType === 'customer' ? 'Cliente Final' :
+                  modalType === 'company' ? 'Embarcador' : 'Frete/Pedido'
+                }
               </h3>
               <button 
                 onClick={closeModal}
@@ -741,7 +1004,7 @@ export default function AdminPage() {
                     <select
                       value={addrType}
                       onChange={(e) => setAddrType(e.target.value as any)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none cursor-pointer"
                     >
                       <option value="customer">Cliente Final (Destinatário)</option>
                       <option value="warehouse">Centro de Distribuição (Origem)</option>
@@ -815,16 +1078,182 @@ export default function AdminPage() {
                 </div>
               )}
 
+              {/* FORM CLIENTE */}
+              {modalType === 'customer' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nome Completo *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custName}
+                      onChange={(e) => setCustName(e.target.value)}
+                      placeholder="Ex: Maria Oliveira"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">CPF ou CNPJ *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custCpfCnpj}
+                      onChange={(e) => setCustCpfCnpj(e.target.value)}
+                      placeholder="Apenas números"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Telefone</label>
+                    <input
+                      type="text"
+                      value={custPhone}
+                      onChange={(e) => setCustPhone(e.target.value)}
+                      placeholder="(11) 99999-9999"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</label>
+                    <input
+                      type="email"
+                      value={custEmail}
+                      onChange={(e) => setCustEmail(e.target.value)}
+                      placeholder="maria@exemplo.com"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  
+                  {/* Endereço Acoplado para o Cliente */}
+                  <div className="col-span-2 border-t border-slate-800 pt-3 mt-1">
+                    <h4 className="text-xs font-bold text-slate-300 mb-2">Endereço de Entrega</h4>
+                  </div>
+
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Logradouro / Rua *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custStreet}
+                      onChange={(e) => setCustStreet(e.target.value)}
+                      placeholder="Ex: Rua das Flores, 123"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cidade *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custCity}
+                      onChange={(e) => setCustCity(e.target.value)}
+                      placeholder="Ex: São Paulo"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Estado (UF) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custState}
+                      onChange={(e) => setCustState(e.target.value)}
+                      placeholder="Ex: SP"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">CEP *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custPostalCode}
+                      onChange={(e) => setCustPostalCode(e.target.value)}
+                      placeholder="Ex: 04533-000"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Latitude *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custLat}
+                      onChange={(e) => setCustLat(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Longitude *</label>
+                    <input
+                      type="text"
+                      required
+                      value={custLng}
+                      onChange={(e) => setCustLng(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* FORM EMPRESA/EMBARCADOR */}
+              {modalType === 'company' && (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nome da Empresa Parceira *</label>
+                    <input
+                      type="text"
+                      required
+                      value={compName}
+                      onChange={(e) => setCompName(e.target.value)}
+                      placeholder="Ex: LogiTrack Coletas S.A."
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-3 px-4 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* FORM PEDIDO/FRETE */}
               {modalType === 'order' && (
                 <div className="space-y-4">
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Embarcador (Empresa) *</label>
+                    <select
+                      required
+                      value={orderCompanyId}
+                      onChange={(e) => setOrderCompanyId(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none cursor-pointer"
+                    >
+                      <option value="">Selecione a empresa dona da carga</option>
+                      {companies.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cliente (Destinatário) *</label>
+                    <select
+                      required
+                      value={orderCustomerId}
+                      onChange={(e) => setOrderCustomerId(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none cursor-pointer"
+                    >
+                      <option value="">Selecione o cliente de destino</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.cpf_cnpj})</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Endereço de Origem (Coleta) *</label>
                     <select
                       required
                       value={orderOriginId}
                       onChange={(e) => setOrderOriginId(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none cursor-pointer"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none cursor-pointer"
                     >
                       <option value="">Selecione um Centro de Origem</option>
                       {addresses
@@ -836,30 +1265,31 @@ export default function AdminPage() {
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Endereço de Destino (Entrega) *</label>
-                    <select
-                      required
-                      value={orderDestId}
-                      onChange={(e) => setOrderDestId(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none cursor-pointer"
-                    >
-                      <option value="">Selecione o Cliente de Entrega</option>
-                      {addresses
-                        .filter(a => a.address_type === 'customer')
-                        .map(a => (
-                          <option key={a.id} value={a.id}>{a.street} ({a.city})</option>
-                        ))
-                      }
-                    </select>
-                  </div>
+                  {!orderCustomerId && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ou Endereço de Destino Manual *</label>
+                      <select
+                        value={orderDestId}
+                        onChange={(e) => setOrderDestId(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none cursor-pointer"
+                      >
+                        <option value="">Selecione o endereço de entrega</option>
+                        {addresses
+                          .filter(a => a.address_type === 'customer')
+                          .map(a => (
+                            <option key={a.id} value={a.id}>{a.street} ({a.city})</option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Motorista Responsável</label>
                     <select
                       value={orderDriverId}
                       onChange={(e) => setOrderDriverId(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none cursor-pointer"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none cursor-pointer"
                     >
                       <option value="">Não atribuído</option>
                       {drivers.map(d => (
@@ -876,7 +1306,7 @@ export default function AdminPage() {
                         step="0.01"
                         value={orderWeight}
                         onChange={(e) => setOrderWeight(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -886,7 +1316,7 @@ export default function AdminPage() {
                         step="0.001"
                         value={orderVolume}
                         onChange={(e) => setOrderVolume(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none"
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none"
                       />
                     </div>
                   </div>
@@ -897,7 +1327,7 @@ export default function AdminPage() {
                       <select
                         value={orderStatus}
                         onChange={(e) => setOrderStatus(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2 px-3 text-sm text-slate-100 outline-none cursor-pointer"
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-2.5 px-3 text-sm text-slate-100 outline-none cursor-pointer"
                       >
                         <option value="pending">Pendente (pending)</option>
                         <option value="assigned">Atribuído (assigned)</option>

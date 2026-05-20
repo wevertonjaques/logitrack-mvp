@@ -3,7 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Lock, Truck, Shield, KeyRound, AlertCircle, ArrowRight } from 'lucide-react';
+import { Lock, Truck, Shield, KeyRound, AlertCircle, ArrowRight, Building2, User } from 'lucide-react';
+
+interface Company {
+  id: string;
+  name: string;
+}
 
 interface Driver {
   id: string;
@@ -11,43 +16,98 @@ interface Driver {
   cpf: string;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  cpf_cnpj: string;
+}
+
 export default function LoginPage() {
   const router = useRouter();
 
   // Estados
-  const [role, setRole] = useState<'admin' | 'driver'>('admin');
+  const [role, setRole] = useState<'admin' | 'company' | 'driver' | 'customer'>('admin');
   const [password, setPassword] = useState('');
+  
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [selectedDriverId, setSelectedDriverId] = useState('');
-  const [loading, setLoading] = useState(false);
   const [driversLoading, setDriversLoading] = useState(false);
+
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [customersLoading, setCustomersLoading] = useState(false);
+
+  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Carregar motoristas cadastrados se a role for driver
+  // Carregar dados de acordo com o perfil selecionado
   useEffect(() => {
-    if (role === 'driver') {
+    setErrorMsg(null);
+
+    if (role === 'company') {
+      const fetchCompanies = async () => {
+        setCompaniesLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from('companies')
+            .select('id, name')
+            .order('name');
+          if (error) throw error;
+          setCompanies(data || []);
+          if (data && data.length > 0) {
+            setSelectedCompanyId(data[0].id);
+          }
+        } catch (err: any) {
+          setErrorMsg('Erro ao carregar empresas. Verifique a conexão com o Supabase.');
+        } finally {
+          setCompaniesLoading(false);
+        }
+      };
+      fetchCompanies();
+    } else if (role === 'driver') {
       const fetchDrivers = async () => {
         setDriversLoading(true);
-        setErrorMsg(null);
         try {
           const { data, error } = await supabase
             .from('drivers')
             .select('id, name, cpf')
             .order('name');
-          
           if (error) throw error;
-          
           setDrivers(data || []);
           if (data && data.length > 0) {
             setSelectedDriverId(data[0].id);
           }
         } catch (err: any) {
-          setErrorMsg('Erro ao carregar motoristas. Verifique se o schema do banco foi instalado.');
+          setErrorMsg('Erro ao carregar motoristas. Verifique se o schema foi aplicado.');
         } finally {
           setDriversLoading(false);
         }
       };
       fetchDrivers();
+    } else if (role === 'customer') {
+      const fetchCustomers = async () => {
+        setCustomersLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from('customers')
+            .select('id, name, cpf_cnpj')
+            .order('name');
+          if (error) throw error;
+          setCustomers(data || []);
+          if (data && data.length > 0) {
+            setSelectedCustomerId(data[0].id);
+          }
+        } catch (err: any) {
+          setErrorMsg('Erro ao carregar clientes. Verifique se a tabela customers existe.');
+        } finally {
+          setCustomersLoading(false);
+        }
+      };
+      fetchCustomers();
     }
   }, [role]);
 
@@ -56,7 +116,6 @@ export default function LoginPage() {
     setLoading(true);
     setErrorMsg(null);
 
-    // Pequena pausa para efeito de carregamento premium
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     if (role === 'admin') {
@@ -67,21 +126,39 @@ export default function LoginPage() {
         setErrorMsg('Senha administrativa incorreta. Use "admin123".');
         setLoading(false);
       }
-    } else {
+    } else if (role === 'company') {
+      if (!selectedCompanyId) {
+        setErrorMsg('Nenhuma empresa disponível para seleção.');
+        setLoading(false);
+        return;
+      }
+      localStorage.setItem('logitrack_user_role', 'company');
+      localStorage.setItem('logitrack_company_id', selectedCompanyId);
+      router.push(`/company?companyId=${selectedCompanyId}`);
+    } else if (role === 'driver') {
       if (!selectedDriverId) {
-        setErrorMsg('Por favor, selecione um motorista ou cadastre um no painel administrativo.');
+        setErrorMsg('Nenhum motorista disponível para seleção.');
         setLoading(false);
         return;
       }
       localStorage.setItem('logitrack_user_role', 'driver');
       localStorage.setItem('logitrack_driver_id', selectedDriverId);
       router.push(`/driver?driverId=${selectedDriverId}`);
+    } else if (role === 'customer') {
+      if (!selectedCustomerId) {
+        setErrorMsg('Nenhum cliente disponível para seleção.');
+        setLoading(false);
+        return;
+      }
+      localStorage.setItem('logitrack_user_role', 'customer');
+      localStorage.setItem('logitrack_customer_id', selectedCustomerId);
+      router.push(`/customer?customerId=${selectedCustomerId}`);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 font-sans relative overflow-hidden">
-      {/* Detalhes de Background Decorativo (Sem roxo, apenas Emerald/Sky) */}
+      {/* Background Decorativo */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -100,63 +177,127 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Seleção de Perfil */}
-        <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-850">
-          <button
-            type="button"
-            onClick={() => { setRole('admin'); setErrorMsg(null); }}
-            className={`py-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-              role === 'admin' 
-                ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' 
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Shield className="w-4 h-4" /> Administrador
-          </button>
-          <button
-            type="button"
-            onClick={() => { setRole('driver'); setErrorMsg(null); }}
-            className={`py-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-              role === 'driver' 
-                ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' 
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Truck className="w-4 h-4" /> Motorista
-          </button>
+        {/* Seleção de Perfil (Grid 2x2) */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Perfil de Acesso</label>
+          <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-2 rounded-2xl border border-slate-850">
+            <button
+              type="button"
+              onClick={() => { setRole('admin'); setErrorMsg(null); }}
+              className={`py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                role === 'admin' 
+                  ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' 
+                  : 'text-slate-450 hover:text-slate-200 hover:bg-slate-900/40'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-sky-400" /> Admin
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => { setRole('company'); setErrorMsg(null); }}
+              className={`py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                role === 'company' 
+                  ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' 
+                  : 'text-slate-450 hover:text-slate-200 hover:bg-slate-900/40'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-teal-400" /> Embarcador
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setRole('driver'); setErrorMsg(null); }}
+              className={`py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                role === 'driver' 
+                  ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' 
+                  : 'text-slate-450 hover:text-slate-200 hover:bg-slate-900/40'
+              }`}
+            >
+              <Truck className="w-3.5 h-3.5 text-emerald-400" /> Motorista
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setRole('customer'); setErrorMsg(null); }}
+              className={`py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                role === 'customer' 
+                  ? 'bg-slate-800 text-slate-100 shadow-md border border-slate-700/50' 
+                  : 'text-slate-450 hover:text-slate-200 hover:bg-slate-900/40'
+              }`}
+            >
+              <User className="w-3.5 h-3.5 text-amber-405" /> Cliente Final
+            </button>
+          </div>
         </div>
 
         {errorMsg && (
-          <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2.5 items-start">
+          <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex gap-2.5 items-start animate-fade-in">
             <AlertCircle className="w-4.5 h-4.5 flex-shrink-0 mt-0.5" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Formulário */}
+        {/* Formulário Dinâmico */}
         <form onSubmit={handleLogin} className="space-y-4">
-          {role === 'admin' ? (
+          
+          {/* Campo do Admin */}
+          {role === 'admin' && (
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha Operador</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-450">Senha do Administrador</label>
               <div className="relative">
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Digite a senha (padrão: admin123)"
+                  placeholder="Senha (padrão: admin123)"
                   required
-                  className="w-full bg-slate-950/60 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-600 outline-none transition-all"
+                  className="w-full bg-slate-950/60 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-650 outline-none transition-all"
                 />
                 <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* Campo da Empresa / Embarcador */}
+          {role === 'company' && (
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Selecionar Motorista</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-450">Selecionar Embarcador</label>
+              <div className="relative">
+                {companiesLoading ? (
+                  <div className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-3 px-4 text-xs text-slate-500">
+                    Carregando embarcadores...
+                  </div>
+                ) : companies.length === 0 ? (
+                  <div className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-3 px-4 text-xs text-slate-500">
+                    Nenhuma empresa cadastrada no banco. Use o CD demo na Home.
+                  </div>
+                ) : (
+                  <select
+                    value={selectedCompanyId}
+                    onChange={(e) => setSelectedCompanyId(e.target.value)}
+                    className="w-full bg-slate-950/60 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 outline-none transition-all appearance-none cursor-pointer"
+                  >
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id} className="bg-slate-950 text-slate-200">
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Building2 className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
+              </div>
+            </div>
+          )}
+
+          {/* Campo do Motorista */}
+          {role === 'driver' && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-450">Selecionar Motorista</label>
               <div className="relative">
                 {driversLoading ? (
                   <div className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-3 px-4 text-xs text-slate-500">
-                    Buscando motoristas cadastrados...
+                    Carregando motoristas...
                   </div>
                 ) : drivers.length === 0 ? (
                   <div className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-3 px-4 text-xs text-slate-500">
@@ -169,21 +310,57 @@ export default function LoginPage() {
                     className="w-full bg-slate-950/60 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 outline-none transition-all appearance-none cursor-pointer"
                   >
                     {drivers.map((d) => (
-                      <option key={d.id} value={d.id} className="bg-slate-950">
+                      <option key={d.id} value={d.id} className="bg-slate-950 text-slate-200">
                         {d.name} ({d.cpf})
                       </option>
                     ))}
                   </select>
                 )}
-                <UserIcon className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
+                <User className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
+              </div>
+            </div>
+          )}
+
+          {/* Campo do Cliente Final */}
+          {role === 'customer' && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-450">Selecionar Cliente</label>
+              <div className="relative">
+                {customersLoading ? (
+                  <div className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-3 px-4 text-xs text-slate-500">
+                    Carregando clientes...
+                  </div>
+                ) : customers.length === 0 ? (
+                  <div className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-3 px-4 text-xs text-slate-500">
+                    Nenhum cliente cadastrado no banco.
+                  </div>
+                ) : (
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    className="w-full bg-slate-950/60 border border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 outline-none transition-all appearance-none cursor-pointer"
+                  >
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id} className="bg-slate-950 text-slate-200">
+                        {c.name} ({c.cpf_cnpj})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <User className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
               </div>
             </div>
           )}
 
           <button
             type="submit"
-            disabled={loading || (role === 'driver' && drivers.length === 0)}
-            className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-sky-600/10 transition-all cursor-pointer"
+            disabled={
+              loading || 
+              (role === 'company' && companies.length === 0) || 
+              (role === 'driver' && drivers.length === 0) || 
+              (role === 'customer' && customers.length === 0)
+            }
+            className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-sky-600/10 transition-all cursor-pointer mt-2"
           >
             {loading ? 'Autenticando...' : 'Acessar Sistema'}
             <ArrowRight className="w-4 h-4" />
@@ -192,21 +369,5 @@ export default function LoginPage() {
 
       </div>
     </div>
-  );
-}
-
-// Pequeno helper local para o ícone de User
-function UserIcon({ className }: { className?: string }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={1.5} 
-      stroke="currentColor" 
-      className={className}
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-    </svg>
   );
 }
