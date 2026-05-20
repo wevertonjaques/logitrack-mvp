@@ -32,6 +32,8 @@ jobs:
       - name: Build Next.js App
         run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder' }}
-          NEXT_PUBLIC_GOOGLE_MAPS_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_KEY || 'AIzaSyPlaceholder' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://dpucfojyzqhziqkqwaos.supabase.co
+' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwdWNmb2p5enFoemlxa3F3YW9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyOTA5NTUsImV4cCI6MjA5NDg2Njk1NX0.moKgOptDErspglXgSYuQz8mXlf0x_plRorY8Ws1LgdI' }}
+          NEXT_PUBLIC_GOOGLE_MAPS_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_KEY || 'AIzaSyDWOWA4BRu9j0LaAQuesOzV_Ihqhv6gKIY
+' }}

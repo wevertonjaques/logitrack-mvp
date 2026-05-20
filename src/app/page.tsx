@@ -65,9 +65,32 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 bg-grid-slate-900 font-sans selection:bg-sky-500/30">
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-4 sm:p-6 bg-grid-slate-900 font-sans selection:bg-sky-500/30 relative">
+      
+      {/* Top Navbar */}
+      <header className="w-full max-w-5xl flex items-center justify-between py-4 mb-6 border-b border-slate-900">
+        <div className="flex items-center gap-2">
+          <Truck className="w-5 h-5 text-sky-400" />
+          <span className="font-bold text-slate-200 text-sm tracking-tight">LogiTrack</span>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => router.push('/login')}
+            className="text-xs font-semibold text-slate-400 hover:text-slate-200 py-2 px-4 rounded-xl hover:bg-slate-900 transition-all cursor-pointer"
+          >
+            Entrar
+          </button>
+          <button
+            onClick={() => router.push('/admin')}
+            className="text-xs font-semibold bg-sky-950/40 text-sky-400 hover:text-sky-300 py-2.5 px-4 rounded-xl border border-sky-900/30 hover:bg-sky-900/10 transition-all cursor-pointer"
+          >
+            Painel Admin
+          </button>
+        </div>
+      </header>
+
       {/* Header / Brand */}
-      <div className="text-center mb-10 max-w-xl animate-fade-in">
+      <div className="text-center mb-10 max-w-xl animate-fade-in mt-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-semibold mb-4">
           <Truck className="w-3.5 h-3.5" /> LogiTrack MVP
         </div>
@@ -79,7 +102,7 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl items-stretch mb-12">
         
         {/* Painel do Cliente - Rastrear Pedido */}
         <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col justify-between hover:border-slate-700/60 transition-all duration-300 shadow-xl">

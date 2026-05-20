@@ -194,3 +194,201 @@ export async function seedDemoData() {
     return { success: false, message: `Erro ao criar dados demo: ${err.message || err}` };
   }
 }
+
+// ==========================================
+// CRUD ENDEREÇOS / CLIENTES
+// ==========================================
+
+export async function createAddress(formData: FormData): Promise<{ success: boolean; message: string; addressId?: string }> {
+  const addressType = formData.get('addressType') as string; // 'company' | 'customer' | 'warehouse'
+  const street = formData.get('street') as string;
+  const city = formData.get('city') as string;
+  const state = formData.get('state') as string;
+  const postalCode = formData.get('postalCode') as string;
+  const lat = Number(formData.get('lat') || -23.56);
+  const lng = Number(formData.get('lng') || -46.65);
+
+  if (!addressType || !street || !city || !state || !postalCode) {
+    return { success: false, message: 'Campos obrigatórios de endereço ausentes.' };
+  }
+
+  const pointString = `POINT(${lng} ${lat})`;
+
+  try {
+    const { data, error } = await supabase
+      .from('addresses')
+      .insert({
+        address_type: addressType,
+        street,
+        city,
+        state,
+        postal_code: postalCode,
+        location: pointString,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return { success: true, message: 'Endereço cadastrado com sucesso!', addressId: data.id };
+  } catch (err: any) {
+    return { success: false, message: `Erro ao salvar endereço: ${err.message || err}` };
+  }
+}
+
+export async function updateAddress(
+  addressId: string, 
+  formData: FormData
+): Promise<{ success: boolean; message: string }> {
+  const addressType = formData.get('addressType') as string;
+  const street = formData.get('street') as string;
+  const city = formData.get('city') as string;
+  const state = formData.get('state') as string;
+  const postalCode = formData.get('postalCode') as string;
+  const lat = Number(formData.get('lat'));
+  const lng = Number(formData.get('lng'));
+
+  if (!addressType || !street || !city || !state || !postalCode) {
+    return { success: false, message: 'Campos obrigatórios de endereço ausentes.' };
+  }
+
+  const pointString = `POINT(${lng} ${lat})`;
+
+  try {
+    const { error } = await supabase
+      .from('addresses')
+      .update({
+        address_type: addressType,
+        street,
+        city,
+        state,
+        postal_code: postalCode,
+        location: pointString,
+      })
+      .eq('id', addressId);
+
+    if (error) throw error;
+    return { success: true, message: 'Endereço atualizado com sucesso!' };
+  } catch (err: any) {
+    return { success: false, message: `Erro ao atualizar endereço: ${err.message || err}` };
+  }
+}
+
+export async function deleteAddress(addressId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('addresses')
+      .delete()
+      .eq('id', addressId);
+
+    if (error) throw error;
+    return { success: true, message: 'Endereço excluído com sucesso!' };
+  } catch (err: any) {
+    return { success: false, message: `Erro ao excluir endereço: ${err.message || err}` };
+  }
+}
+
+// ==========================================
+// CRUD PEDIDOS / FRETES
+// ==========================================
+
+export async function createOrder(formData: FormData): Promise<{ success: boolean; message: string; orderId?: string }> {
+  const companyId = formData.get('companyId') as string;
+  const driverId = formData.get('driverId') as string || null;
+  const originAddressId = formData.get('originAddressId') as string;
+  const destinationAddressId = formData.get('destinationAddressId') as string;
+  const weightKg = Number(formData.get('weightKg') || 0);
+  const volumeM3 = Number(formData.get('volumeM3') || 0);
+  const status = formData.get('status') as string || 'pending';
+
+  if (!originAddressId || !destinationAddressId) {
+    return { success: false, message: 'Origem e destino são obrigatórios.' };
+  }
+
+  try {
+    // Obter ou criar uma empresa padrão se nenhuma for selecionada
+    let activeCompanyId = companyId;
+    if (!activeCompanyId) {
+      const { data: existingCompany } = await supabase.from('companies').select('id').limit(1).maybeSingle();
+      if (existingCompany) {
+        activeCompanyId = existingCompany.id;
+      } else {
+        const { data: newCompany, error: compErr } = await supabase
+          .from('companies')
+          .insert({ name: 'LogiTrack Logística S/A' })
+          .select('id')
+          .single();
+        if (compErr) throw compErr;
+        activeCompanyId = newCompany.id;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('orders')
+      .insert({
+        company_id: activeCompanyId,
+        driver_id: driverId || null,
+        origin_address_id: originAddressId,
+        destination_address_id: destinationAddressId,
+        weight_kg: weightKg,
+        volume_m3: volumeM3,
+        status: status,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return { success: true, message: 'Pedido criado com sucesso!', orderId: data.id };
+  } catch (err: any) {
+    return { success: false, message: `Erro ao criar pedido: ${err.message || err}` };
+  }
+}
+
+export async function updateOrder(
+  orderId: string, 
+  formData: FormData
+): Promise<{ success: boolean; message: string }> {
+  const driverId = formData.get('driverId') as string || null;
+  const originAddressId = formData.get('originAddressId') as string;
+  const destinationAddressId = formData.get('destinationAddressId') as string;
+  const weightKg = Number(formData.get('weightKg') || 0);
+  const volumeM3 = Number(formData.get('volumeM3') || 0);
+  const status = formData.get('status') as string;
+
+  if (!originAddressId || !destinationAddressId || !status) {
+    return { success: false, message: 'Campos obrigatórios ausentes.' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        driver_id: driverId || null,
+        origin_address_id: originAddressId,
+        destination_address_id: destinationAddressId,
+        weight_kg: weightKg,
+        volume_m3: volumeM3,
+        status: status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId);
+
+    if (error) throw error;
+    return { success: true, message: 'Pedido atualizado com sucesso!' };
+  } catch (err: any) {
+    return { success: false, message: `Erro ao atualizar pedido: ${err.message || err}` };
+  }
+}
+
+export async function deleteOrder(orderId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('orders')
+      .delete()
+      .eq('id', orderId);
+
+    if (error) throw error;
+    return { success: true, message: 'Pedido excluído com sucesso!' };
+  } catch (err: any) {
+    return { success: false, message: `Erro ao excluir pedido: ${err.message || err}` };
+  }
+}
